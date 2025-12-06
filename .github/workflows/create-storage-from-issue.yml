@@ -15,6 +15,7 @@ jobs:
     if: ${{ contains(github.event.comment.body, 'create') }}
 
     steps:
+
       # -----------------------------------------------------------
       # 1. Extract Issue JSON safely
       # -----------------------------------------------------------
@@ -29,28 +30,26 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------
-      # 2. Debug (optional)
-      # -----------------------------------------------------------
-      # - name: Show raw issue JSON
-      #   run: echo "${{ steps.issue.outputs.data }}"
-
-      # -----------------------------------------------------------
-      # 3. Parse Issue Body Fields (MAC SAFE + LINUX SAFE)
+      # 2. Dump issue JSON
       # -----------------------------------------------------------
       - name: Dump issue info (for debugging)
         run: |
           echo "Issue JSON:"
-          echo '${{ toJson(github.event) }}'
+          echo '${{ toJson(github.event.issue) }}'
 
+      # -----------------------------------------------------------
+      # 3. Extract values from Issue Body
+      # -----------------------------------------------------------
       - name: Extract values from issue body
         id: extract
         run: |
           ISSUE_BODY="${{ github.event.issue.body }}"
           echo "$ISSUE_BODY"
+
           extract_field() {
             echo "$ISSUE_BODY" | sed -n "/^### $1/{n;n;p;}" | xargs
           }
-          
+
           echo "storage_name=$(extract_field "Storage Account Name")" >> "$GITHUB_OUTPUT"
           echo "resource_group=$(extract_field "Resource Group Name")" >> "$GITHUB_OUTPUT"
           echo "location=$(extract_field "Azure Location")" >> "$GITHUB_OUTPUT"
@@ -61,22 +60,20 @@ jobs:
           echo "gh_token=$(extract_field "GitHub Token (PAT)")" >> "$GITHUB_OUTPUT"
           echo "output_repo=$(extract_field "Output Repo Name")" >> "$GITHUB_OUTPUT"
 
-
       # -----------------------------------------------------------
-      # 4. Debug parsed values
+      # 4. Debug parsed values (FIXED)
       # -----------------------------------------------------------
       - name: Debug parsed values
         run: |
-          echo "Storage Name: ${{ steps.parsed.outputs.storage_name }}"
-          echo "Resource Group: ${{ steps.parsed.outputs.resource_group }}"
-          echo "Location: ${{ steps.parsed.outputs.location }}"
-          echo "Client ID: ${{ steps.parsed.outputs.client_id }}"
-          echo "Tenant ID: ${{ steps.parsed.outputs.tenant_id }}"
-          echo "Subscription ID: ${{ steps.parsed.outputs.subscription_id }}"
-          echo "GitHub Account: ${{ steps.parsed.outputs.gh_account }}"
-          echo "GitHub Token: ${{ steps.parsed.outputs.gh_token }}"
-          echo "Output Repo: ${{ steps.parsed.outputs.output_repo }}"
-
+          echo "Storage Name:      '${{ steps.extract.outputs.storage_name }}'"
+          echo "Resource Group:    '${{ steps.extract.outputs.resource_group }}'"
+          echo "Location:          '${{ steps.extract.outputs.location }}'"
+          echo "Client ID:         '${{ steps.extract.outputs.client_id }}'"
+          echo "Tenant ID:         '${{ steps.extract.outputs.tenant_id }}'"
+          echo "Subscription ID:   '${{ steps.extract.outputs.subscription_id }}'"
+          echo "GitHub Account:    '${{ steps.extract.outputs.gh_account }}'"
+          echo "GitHub Token:      '${{ steps.extract.outputs.gh_token }}'"
+          echo "Output Repo:       '${{ steps.extract.outputs.output_repo }}'"
 
       # -----------------------------------------------------------
       # 5. Azure Login using OIDC
@@ -85,9 +82,9 @@ jobs:
         uses: azure/login@v2
         with:
           auth-type: IDENTITY
-          client-id: ${{ steps.parsed.outputs.client_id }}
-          tenant-id: ${{ steps.parsed.outputs.tenant_id }}
-          subscription-id: ${{ steps.parsed.outputs.subscription_id }}
+          client-id: ${{ steps.extract.outputs.client_id }}
+          tenant-id: ${{ steps.extract.outputs.tenant_id }}
+          subscription-id: ${{ steps.extract.outputs.subscription_id }}
 
       # -----------------------------------------------------------
       # 6. Create Resource Group
@@ -95,8 +92,8 @@ jobs:
       - name: Create Resource Group
         run: |
           az group create \
-            --name "${{ steps.parsed.outputs.resource_group }}" \
-            --location "${{ steps.parsed.outputs.location }}"
+            --name "${{ steps.extract.outputs.resource_group }}" \
+            --location "${{ steps.extract.outputs.location }}"
 
       # -----------------------------------------------------------
       # 7. Create Storage Account
@@ -105,45 +102,47 @@ jobs:
         id: storage
         run: |
           az storage account create \
-            --name "${{ steps.parsed.outputs.storage_name }}" \
-            --resource-group "${{ steps.parsed.outputs.resource_group }}" \
-            --location "${{ steps.parsed.outputs.location }}" \
+            --name "${{ steps.extract.outputs.storage_name }}" \
+            --resource-group "${{ steps.extract.outputs.resource_group }}" \
+            --location "${{ steps.extract.outputs.location }}" \
             --sku Standard_LRS
 
           KEY=$(az storage account keys list \
-            --resource-group "${{ steps.parsed.outputs.resource_group }}" \
-            --account-name "${{ steps.parsed.outputs.storage_name }}" \
+            --resource-group "${{ steps.extract.outputs.resource_group }}" \
+            --account-name "${{ steps.extract.outputs.storage_name }}" \
             --query '[0].value' -o tsv)
 
           echo "sa_key=$KEY" >> $GITHUB_OUTPUT
 
       # -----------------------------------------------------------
-      # 8. Check if GitHub repo creation should run
+      # 8. Check Conditional Repo Create Inputs
       # -----------------------------------------------------------
       - name: Check repo create conditions
         id: checkrepo
         run: |
-          if [[ -z "${{ steps.parsed.outputs.gh_account }}" || -z "${{ steps.parsed.outputs.gh_token }}" || -z "${{ steps.parsed.outputs.output_repo }}" ]]; then
+          if [[ -z "${{ steps.extract.outputs.gh_account }}" || \
+                -z "${{ steps.extract.outputs.gh_token }}" || \
+                -z "${{ steps.extract.outputs.output_repo }}" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
       # -----------------------------------------------------------
-      # 9. Create GitHub Repo (Optional)
+      # 9. Create GitHub Repo (optional)
       # -----------------------------------------------------------
       - name: Create GitHub Repo
         if: ${{ steps.checkrepo.outputs.skip == 'false' }}
         env:
-          TOKEN: ${{ steps.parsed.outputs.gh_token }}
+          TOKEN: ${{ steps.extract.outputs.gh_token }}
         run: |
           echo "$TOKEN" | gh auth login --with-token
-          gh repo create "${{ steps.parsed.outputs.gh_account }}/${{ steps.parsed.outputs.output_repo }}" \
+          gh repo create "${{ steps.extract.outputs.gh_account }}/${{ steps.extract.outputs.output_repo }}" \
             --private \
-            --description "Auto-generated repo for ${{ steps.parsed.outputs.storage_name }}"
+            --description "Auto-generated repo for ${{ steps.extract.outputs.storage_name }}"
 
       # -----------------------------------------------------------
-      # 10. Push metadata file to repo
+      # 10. Push Metadata File
       # -----------------------------------------------------------
       - name: Push Metadata File
         if: ${{ steps.checkrepo.outputs.skip == 'false' }}
@@ -151,17 +150,17 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "github-actions"
 
-          git clone "https://github.com/${{ steps.parsed.outputs.gh_account }}/${{ steps.parsed.outputs.output_repo }}" repo
+          git clone "https://github.com/${{ steps.extract.outputs.gh_account }}/${{ steps.extract.outputs.output_repo }}" repo
           cd repo
 
           cat <<EOF > metadata.json
           {
-            "storage_account": "${{ steps.parsed.outputs.storage_name }}",
-            "resource_group": "${{ steps.parsed.outputs.resource_group }}",
-            "location": "${{ steps.parsed.outputs.location }}",
-            "subscription_id": "${{ steps.parsed.outputs.subscription_id }}",
-            "tenant_id": "${{ steps.parsed.outputs.tenant_id }}",
-            "client_id": "${{ steps.parsed.outputs.client_id }}",
+            "storage_account": "${{ steps.extract.outputs.storage_name }}",
+            "resource_group": "${{ steps.extract.outputs.resource_group }}",
+            "location": "${{ steps.extract.outputs.location }}",
+            "subscription_id": "${{ steps.extract.outputs.subscription_id }}",
+            "tenant_id": "${{ steps.extract.outputs.tenant_id }}",
+            "client_id": "${{ steps.extract.outputs.client_id }}",
             "storage_key": "${{ steps.storage.outputs.sa_key }}"
           }
           EOF
