@@ -14,27 +14,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # Extract full issue JSON safely (NO errors)
       - name: Extract issue JSON
         id: issue
-        run: echo "data<<EOF" >> $GITHUB_OUTPUT && \
-             echo '${{ toJson(github.event.issue) }}' >> $GITHUB_OUTPUT && \
-             echo "EOF" >> $GITHUB_OUTPUT
+        run: |
+          {
+            echo "data<<EOF"
+            echo "${{ toJson(github.event.issue) }}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
+      # Parse inputs from form
       - name: Parse Issue Form Inputs
         id: parsed
         run: |
           ISSUE_BODY=$(echo '${{ steps.issue.outputs.data }}' | jq -r '.body')
 
-          STORAGE_NAME=$(echo "$ISSUE_BODY"       | grep -i 'storage_name:'        | awk '{print $2}')
-          RG=$(echo "$ISSUE_BODY"                 | grep -i 'resource_group:'      | awk '{print $2}')
-          LOCATION=$(echo "$ISSUE_BODY"           | grep -i 'location:'            | awk '{print $2}')
-          CLIENT_ID=$(echo "$ISSUE_BODY"          | grep -i 'azure_client_id:'     | awk '{print $2}')
-          TENANT_ID=$(echo "$ISSUE_BODY"          | grep -i 'azure_tenant_id:'     | awk '{print $2}')
-          SUB_ID=$(echo "$ISSUE_BODY"             | grep -i 'azure_subscription_id:' | awk '{print $2}')
+          STORAGE_NAME=$(echo "$ISSUE_BODY" | grep -A1 "Storage Account Name" | tail -1 | xargs)
+          RG=$(echo "$ISSUE_BODY" | grep -A1 "Resource Group Name" | tail -1 | xargs)
+          LOCATION=$(echo "$ISSUE_BODY" | grep -A1 "Azure Location" | tail -1 | xargs)
+          CLIENT_ID=$(echo "$ISSUE_BODY" | grep -A1 "Azure Client ID" | tail -1 | xargs)
+          TENANT_ID=$(echo "$ISSUE_BODY" | grep -A1 "Azure Tenant ID" | tail -1 | xargs)
+          SUB_ID=$(echo "$ISSUE_BODY" | grep -A1 "Azure Subscription ID" | tail -1 | xargs)
 
-          GH_ACC=$(echo "$ISSUE_BODY"             | grep -i 'github_account:'      | awk '{print $2}')
-          GH_TOKEN=$(echo "$ISSUE_BODY"           | grep -i 'github_token:'        | awk '{print $2}')
-          REPO_NAME=$(echo "$ISSUE_BODY"          | grep -i 'repo_name:'           | awk '{print $2}')
+          GH_ACC=$(echo "$ISSUE_BODY" | grep -A1 "GitHub Account Name" | tail -1 | xargs)
+          GH_TOKEN=$(echo "$ISSUE_BODY" | grep -A1 "GitHub Token" | tail -1 | xargs)
+          REPO_NAME=$(echo "$ISSUE_BODY" | grep -A1 "Output Repo Name" | tail -1 | xargs)
 
           echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
           echo "rg=$RG" >> $GITHUB_OUTPUT
@@ -46,6 +52,7 @@ jobs:
           echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
           echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
 
+      # Azure login (OIDC – no secret required)
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
@@ -84,15 +91,19 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
+      # Create repo
       - name: Create GitHub Repo
         if: steps.checkrepo.outputs.skip == 'false'
+        env:
+          TOKEN: ${{ steps.parsed.outputs.gh_token }}
         run: |
-          echo "${{ steps.parsed.outputs.gh_token }}" | gh auth login --with-token
+          echo "$TOKEN" | gh auth login --with-token
 
           gh repo create "${{ steps.parsed.outputs.gh_acc }}/${{ steps.parsed.outputs.repo_name }}" \
             --private \
             --description "Auto-generated repo for storage account ${{ steps.parsed.outputs.storage_name }}"
 
+      # Push metadata.json
       - name: Push Metadata File
         if: steps.checkrepo.outputs.skip == 'false'
         run: |
