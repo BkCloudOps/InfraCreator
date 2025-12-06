@@ -12,157 +12,145 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    # Only run if the comment contains the keyword "create"
-    if: contains(github.event.comment.body, 'create')
+    if: ${{ contains(github.event.comment.body, 'create') }}
 
     steps:
-    # -------------------------------------------------------
-    # 1. Extract full issue JSON SAFELY (no syntax errors)
-    # -------------------------------------------------------
-    - name: Extract issue JSON
-      id: issue
-      env:
-        ISSUE_JSON: ${{ toJson(github.event.issue) }}
-      run: |
-        {
-          echo "data<<EOF"
-          printf "%s\n" "$ISSUE_JSON"
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
+      # -------------------------------------------------------
+      # 1. Extract full issue JSON SAFELY (no syntax errors)
+      # -------------------------------------------------------
+      - name: Extract issue JSON
+        id: issue
+        env:
+          ISSUE_JSON: ${{ toJson(github.event.issue) }}
+        run: |
+          {
+            echo "data<<EOF"
+            printf "%s\n" "$ISSUE_JSON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-    # -------------------------------------------------------
-    # 2. Parse issue form values
-    # -------------------------------------------------------
-    - name: Parse Issue Form Inputs
-      id: parsed
-      run: |
-        BODY=$(echo '${{ steps.issue.outputs.data }}' | jq -r '.body')
+      # -------------------------------------------------------
+      # 2. Parse issue form values
+      # -------------------------------------------------------
+      - name: Parse Issue Form Inputs
+        id: parsed
+        run: |
+          BODY=$(echo '${{ steps.issue.outputs.data }}' | jq -r '.body')
+          
+          STORAGE_NAME=$(echo "$BODY" | awk '/### Storage Account Name/{getline; print}')
+          RESOURCE_GROUP=$(echo "$BODY" | awk '/### Resource Group Name/{getline; print}')
+          LOCATION=$(echo "$BODY" | awk '/### Azure Location/{getline; print}')
+          CLIENT_ID=$(echo "$BODY" | awk '/### Azure Client ID/{getline; print}')
+          TENANT_ID=$(echo "$BODY" | awk '/### Azure Tenant ID/{getline; print}')
+          SUBSCRIPTION_ID=$(echo "$BODY" | awk '/### Azure Subscription ID/{getline; print}')
+          GH_ACCOUNT=$(echo "$BODY" | awk '/### GitHub Account Name/{getline; print}')
+          GH_TOKEN=$(echo "$BODY" | awk '/### GitHub Token \\(PAT\\)/{getline; print}')
+          OUTPUT_REPO=$(echo "$BODY" | awk '/### Output Repo Name/{getline; print}')
     
-        STORAGE_NAME=$(echo "$BODY" | awk '/### Storage Account Name/{getline; print}')
-        RESOURCE_GROUP=$(echo "$BODY" | awk '/### Resource Group Name/{getline; print}')
-        LOCATION=$(echo "$BODY" | awk '/### Azure Location/{getline; print}')
-        CLIENT_ID=$(echo "$BODY" | awk '/### Azure Client ID/{getline; print}')
-        TENANT_ID=$(echo "$BODY" | awk '/### Azure Tenant ID/{getline; print}')
-        SUBSCRIPTION_ID=$(echo "$BODY" | awk '/### Azure Subscription ID/{getline; print}')
-        GH_ACCOUNT=$(echo "$BODY" | awk '/### GitHub Account Name/{getline; print}')
-        GH_TOKEN=$(echo "$BODY" | awk '/### GitHub Token \(PAT\)/{getline; print}')
-        OUTPUT_REPO=$(echo "$BODY" | awk '/### Output Repo Name/{getline; print}')
-    
-        echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
-        echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
-        echo "location=$LOCATION" >> $GITHUB_OUTPUT
-        echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
-        echo "tenant_id=$TENANT_ID" >> $GITHUB_OUTPUT
-        echo "subscription_id=$SUBSCRIPTION_ID" >> $GITHUB_OUTPUT
-        echo "gh_account=$GH_ACCOUNT" >> $GITHUB_OUTPUT
-        echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
-        echo "output_repo=$OUTPUT_REPO" >> $GITHUB_OUTPUT
+          echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
+          echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
+          echo "location=$LOCATION" >> $GITHUB_OUTPUT
+          echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "tenant_id=$TENANT_ID" >> $GITHUB_OUTPUT
+          echo "subscription_id=$SUBSCRIPTION_ID" >> $GITHUB_OUTPUT
+          echo "gh_account=$GH_ACCOUNT" >> $GITHUB_OUTPUT
+          echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
+          echo "output_repo=$OUTPUT_REPO" >> $GITHUB_OUTPUT
 
+      - name: Debug values
+        run: |
+          echo "CLIENT = ${{ steps.parsed.outputs.client_id }}"
+          echo "TENANT = ${{ steps.parsed.outputs.tenant_id }}"
+          echo "SUBSCRIPTION = ${{ steps.parsed.outputs.subscription_id }}"
 
-    - name: Debug values
-      run: |
-        echo "CLIENT=$CLIENT_ID"
-        echo "TENANT=$TENANT_ID"
-        echo "SUB=$SUB_ID"
+      # -------------------------------------------------------
+      # 3. Azure OIDC Login
+      # -------------------------------------------------------
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          auth-type: IDENTITY
+          client-id: ${{ steps.parsed.outputs.client_id }}
+          tenant-id: ${{ steps.parsed.outputs.tenant_id }}
+          subscription-id: ${{ steps.parsed.outputs.subscription_id }}
 
+      # -------------------------------------------------------
+      # 4. Create Resource Group
+      # -------------------------------------------------------
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name "${{ steps.parsed.outputs.resource_group }}" \
+            --location "${{ steps.parsed.outputs.location }}"
 
+      # -------------------------------------------------------
+      # 5. Create Storage Account
+      # -------------------------------------------------------
+      - name: Create Storage Account
+        id: storage
+        run: |
+          az storage account create \
+            --name "${{ steps.parsed.outputs.storage_name }}" \
+            --resource-group "${{ steps.parsed.outputs.resource_group }}" \
+            --location "${{ steps.parsed.outputs.location }}" \
+            --sku Standard_LRS
 
+          KEY=$(az storage account keys list \
+            --resource-group "${{ steps.parsed.outputs.resource_group }}" \
+            --account-name "${{ steps.parsed.outputs.storage_name }}" \
+            --query '[0].value' -o tsv)
 
+          echo "sa_key=$KEY" >> $GITHUB_OUTPUT
 
+      # -------------------------------------------------------
+      # 6. Determine if Repo Creation Should Be Skipped
+      # -------------------------------------------------------
+      - name: Check if repo creation should be skipped
+        id: checkrepo
+        run: |
+          if [[ -z "${{ steps.parsed.outputs.gh_account }}" || -z "${{ steps.parsed.outputs.gh_token }}" || -z "${{ steps.parsed.outputs.output_repo }}" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
 
-    # -------------------------------------------------------
-    # 3. Azure OIDC Login
-    # -------------------------------------------------------
-    - name: Azure Login
-      uses: azure/login@v2
-      with:
-        auth-type: IDENTITY
-        client-id: ${{ steps.parsed.outputs.client_id }}
-        tenant-id: ${{ steps.parsed.outputs.tenant_id }}
-        subscription-id: ${{ steps.parsed.outputs.sub_id }}
+      # -------------------------------------------------------
+      # 7. Create GitHub Repo (optional)
+      # -------------------------------------------------------
+      - name: Create GitHub Repo
+        if: ${{ steps.checkrepo.outputs.skip == 'false' }}
+        env:
+          TOKEN: ${{ steps.parsed.outputs.gh_token }}
+        run: |
+          echo "$TOKEN" | gh auth login --with-token
+          gh repo create "${{ steps.parsed.outputs.gh_account }}/${{ steps.parsed.outputs.output_repo }}" \
+            --private \
+            --description "Auto-generated repo for storage account ${{ steps.parsed.outputs.storage_name }}"
 
+      # -------------------------------------------------------
+      # 8. Push Metadata File to Repo (optional)
+      # -------------------------------------------------------
+      - name: Push Metadata File
+        if: ${{ steps.checkrepo.outputs.skip == 'false' }}
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions"
 
+          git clone "https://github.com/${{ steps.parsed.outputs.gh_account }}/${{ steps.parsed.outputs.output_repo }}" repo
+          cd repo
 
+          cat <<EOF > metadata.json
+          {
+            "storage_account": "${{ steps.parsed.outputs.storage_name }}",
+            "resource_group": "${{ steps.parsed.outputs.resource_group }}",
+            "location": "${{ steps.parsed.outputs.location }}",
+            "subscription_id": "${{ steps.parsed.outputs.subscription_id }}",
+            "tenant_id": "${{ steps.parsed.outputs.tenant_id }}",
+            "client_id": "${{ steps.parsed.outputs.client_id }}",
+            "storage_key": "${{ steps.storage.outputs.sa_key }}"
+          }
+          EOF
 
-    # -------------------------------------------------------
-    # 4. Create resource group
-    # -------------------------------------------------------
-    - name: Create Resource Group
-      run: |
-        az group create \
-          --name "${{ steps.parsed.outputs.rg }}" \
-          --location "${{ steps.parsed.outputs.location }}"
-
-    # -------------------------------------------------------
-    # 5. Create storage account
-    # -------------------------------------------------------
-    - name: Create Storage Account
-      id: storage
-      run: |
-        az storage account create \
-          --name "${{ steps.parsed.outputs.storage_name }}" \
-          --resource-group "${{ steps.parsed.outputs.rg }}" \
-          --location "${{ steps.parsed.outputs.location }}" \
-          --sku Standard_LRS
-
-        KEY=$(az storage account keys list \
-          --resource-group "${{ steps.parsed.outputs.rg }}" \
-          --account-name "${{ steps.parsed.outputs.storage_name }}" \
-          --query '[0].value' -o tsv)
-
-        echo "sa_key=$KEY" >> $GITHUB_OUTPUT
-
-    # -------------------------------------------------------
-    # 6. Skip repo if empty fields
-    # -------------------------------------------------------
-    - name: Check if repo creation should be skipped
-      id: checkrepo
-      run: |
-        if [[ -z "${{ steps.parsed.outputs.gh_acc }}" || -z "${{ steps.parsed.outputs.gh_token }}" || -z "${{ steps.parsed.outputs.repo_name }}" ]]; then
-          echo "skip=true" >> $GITHUB_OUTPUT
-        else
-          echo "skip=false" >> $GITHUB_OUTPUT
-        fi
-
-    # -------------------------------------------------------
-    # 7. Create repo (optional)
-    # -------------------------------------------------------
-    - name: Create GitHub Repo
-      if: steps.checkrepo.outputs.skip == 'false'
-      env:
-        TOKEN: ${{ steps.parsed.outputs.gh_token }}
-      run: |
-        echo "$TOKEN" | gh auth login --with-token
-
-        gh repo create "${{ steps.parsed.outputs.gh_acc }}/${{ steps.parsed.outputs.repo_name }}" \
-          --private \
-          --description "Auto-generated repo for storage account ${{ steps.parsed.outputs.storage_name }}"
-
-    # -------------------------------------------------------
-    # 8. Push Metadata File (optional)
-    # -------------------------------------------------------
-    - name: Push Metadata File
-      if: steps.checkrepo.outputs.skip == 'false'
-      run: |
-        git config --global user.email "actions@github.com"
-        git config --global user.name "github-actions"
-
-        git clone "https://github.com/${{ steps.parsed.outputs.gh_acc }}/${{ steps.parsed.outputs.repo_name }}" repo
-        cd repo
-
-        cat <<EOF > metadata.json
-        {
-          "storage_account": "${{ steps.parsed.outputs.storage_name }}",
-          "resource_group": "${{ steps.parsed.outputs.rg }}",
-          "location": "${{ steps.parsed.outputs.location }}",
-          "subscription_id": "${{ steps.parsed.outputs.sub_id }}",
-          "tenant_id": "${{ steps.parsed.outputs.tenant_id }}",
-          "client_id": "${{ steps.parsed.outputs.client_id }}",
-          "storage_key": "${{ steps.storage.outputs.sa_key }}"
-        }
-        EOF
-
-        git add metadata.json
-        git commit -m "Add auto-generated metadata"
-        git push
+          git add metadata.json
+          git commit -m "Add auto-generated metadata"
+          git push
