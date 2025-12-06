@@ -53,6 +53,7 @@ jobs:
           }
 
           echo "storage_name=$(extract_field "Storage Account Name")" >> "$GITHUB_OUTPUT"
+          echo $storage_name
           echo "resource_group=$(extract_field "Resource Group Name")" >> "$GITHUB_OUTPUT"
           echo "location=$(extract_field "Azure Location")" >> "$GITHUB_OUTPUT"
           echo "client_id=$(extract_field "Azure Client ID")" >> "$GITHUB_OUTPUT"
