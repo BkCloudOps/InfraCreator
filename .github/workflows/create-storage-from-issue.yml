@@ -46,22 +46,15 @@ jobs:
           echo "$BODY"
           echo "---- ISSUE BODY END ----"
 
-          parse_field() {
-            echo "$BODY" | awk -v header="$1" '
-              $0 ~ header {found=1; next}
-              found && NF {print; exit}
-            '
-          }
-
-          STORAGE_NAME=$(parse_field "### Storage Account Name")
-          RESOURCE_GROUP=$(parse_field "### Resource Group Name")
-          LOCATION=$(parse_field "### Azure Location")
-          CLIENT_ID=$(parse_field "### Azure Client ID")
-          TENANT_ID=$(parse_field "### Azure Tenant ID")
-          SUBSCRIPTION_ID=$(parse_field "### Azure Subscription ID")
-          GH_ACCOUNT=$(parse_field "### GitHub Account Name")
-          GH_TOKEN=$(parse_field "### GitHub Token")
-          OUTPUT_REPO=$(parse_field "### Output Repo Name")
+          STORAGE_NAME=$(echo "$BODY" | awk '/^### Storage Account Name/{flag=1; next} flag && NF{print; exit}')
+          RESOURCE_GROUP=$(echo "$BODY" | awk '/^### Resource Group Name/{flag=1; next} flag && NF{print; exit}')
+          LOCATION=$(echo "$BODY" | awk '/^### Azure Location/{flag=1; next} flag && NF{print; exit}')
+          CLIENT_ID=$(echo "$BODY" | awk '/^### Azure Client ID/{flag=1; next} flag && NF{print; exit}')
+          TENANT_ID=$(echo "$BODY" | awk '/^### Azure Tenant ID/{flag=1; next} flag && NF{print; exit}')
+          SUBSCRIPTION_ID=$(echo "$BODY" | awk '/^### Azure Subscription ID/{flag=1; next} flag && NF{print; exit}')
+          GH_ACCOUNT=$(echo "$BODY" | awk '/^### GitHub Account Name/{flag=1; next} flag && NF{print; exit}')
+          GH_TOKEN=$(echo "$BODY" | awk '/^### GitHub Token/{flag=1; next} flag && NF{print; exit}')
+          OUTPUT_REPO=$(echo "$BODY" | awk '/^### Output Repo Name/{flag=1; next} flag && NF{print; exit}')
 
           echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
           echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
@@ -72,6 +65,7 @@ jobs:
           echo "gh_account=$GH_ACCOUNT" >> $GITHUB_OUTPUT
           echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
           echo "output_repo=$OUTPUT_REPO" >> $GITHUB_OUTPUT
+
 
 
       # -----------------------------------------------------------
