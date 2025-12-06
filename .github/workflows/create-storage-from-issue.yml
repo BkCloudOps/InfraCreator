@@ -37,10 +37,10 @@ jobs:
     - name: Parse Issue Form Inputs
       id: parsed
       run: |
-        # SAFE: Treat JSON as a literal string, not bash syntax
-        BODY='${{ steps.issue.outputs.data }}'
+        # Extract ONLY the markdown body from the JSON
+        RAW_JSON='${{ steps.issue.outputs.data }}'
+        BODY=$(echo "$RAW_JSON" | jq -r '.body')
     
-        # Extract fields (next line after the heading)
         STORAGE_NAME=$(echo "$BODY" | sed -n '/Storage Account Name/{n;p}' | xargs)
         RG=$(echo "$BODY" | sed -n '/Resource Group Name/{n;p}' | xargs)
         LOCATION=$(echo "$BODY" | sed -n '/Azure Location/{n;p}' | xargs)
@@ -61,6 +61,14 @@ jobs:
         echo "gh_acc=$GH_ACC" >> $GITHUB_OUTPUT
         echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
         echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+
+    - name: Debug values
+      run: |
+        echo "CLIENT=$CLIENT_ID"
+        echo "TENANT=$TENANT_ID"
+        echo "SUB=$SUB_ID"
+
+
 
 
 
