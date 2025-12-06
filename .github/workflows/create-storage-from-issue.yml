@@ -15,7 +15,9 @@ jobs:
     if: ${{ contains(github.event.comment.body, 'create') }}
 
     steps:
-      # 1. Extract Issue JSON properly
+      # -----------------------------------------------------------
+      # 1. Extract Issue JSON safely
+      # -----------------------------------------------------------
       - name: Extract issue JSON
         id: issue
         run: |
@@ -26,12 +28,15 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # 2. Print raw JSON (optional debug)
+      # -----------------------------------------------------------
+      # 2. Debug (optional)
+      # -----------------------------------------------------------
       - name: Show raw issue JSON
-        run: |
-          echo "${{ steps.issue.outputs.data }}"
+        run: echo "${{ steps.issue.outputs.data }}"
 
-      # 3. Parse body and extract fields
+      # -----------------------------------------------------------
+      # 3. Parse Issue Body Fields (MAC SAFE + LINUX SAFE)
+      # -----------------------------------------------------------
       - name: Parse Issue Form Inputs
         id: parsed
         run: |
@@ -41,15 +46,23 @@ jobs:
           echo "$BODY"
           echo "---- ISSUE BODY END ----"
 
-          STORAGE_NAME=$(echo "$BODY" | awk '/### Storage Account Name/{getline; print}')
-          RESOURCE_GROUP=$(echo "$BODY" | awk '/### Resource Group Name/{getline; print}')
-          LOCATION=$(echo "$BODY" | awk '/### Azure Location/{getline; print}')
-          CLIENT_ID=$(echo "$BODY" | awk '/### Azure Client ID/{getline; print}')
-          TENANT_ID=$(echo "$BODY" | awk '/### Azure Tenant ID/{getline; print}')
-          SUBSCRIPTION_ID=$(echo "$BODY" | awk '/### Azure Subscription ID/{getline; print}')
-          GH_ACCOUNT=$(echo "$BODY" | awk '/### GitHub Account Name/{getline; print}')
-          GH_TOKEN=$(echo "$BODY" | awk '/### GitHub Token \(PAT\)/{getline; print}')
-          OUTPUT_REPO=$(echo "$BODY" | awk '/### Output Repo Name/{getline; print}')
+          # Universal field parser (works on macOS + Linux)
+          parse_field() {
+            echo "$BODY" | awk -v header="$1" '
+              $0 ~ header {found=1; next}
+              found && NF {print; exit}
+            '
+          }
+
+          STORAGE_NAME=$(parse_field "### Storage Account Name")
+          RESOURCE_GROUP=$(parse_field "### Resource Group Name")
+          LOCATION=$(parse_field "### Azure Location")
+          CLIENT_ID=$(parse_field "### Azure Client ID")
+          TENANT_ID=$(parse_field "### Azure Tenant ID")
+          SUBSCRIPTION_ID=$(parse_field "### Azure Subscription ID")
+          GH_ACCOUNT=$(parse_field "### GitHub Account Name")
+          GH_TOKEN=$(parse_field "### GitHub Token")
+          OUTPUT_REPO=$(parse_field "### Output Repo Name")
 
           echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
           echo "resource_group=$RESOURCE_GROUP" >> $GITHUB_OUTPUT
@@ -61,14 +74,21 @@ jobs:
           echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
           echo "output_repo=$OUTPUT_REPO" >> $GITHUB_OUTPUT
 
+      # -----------------------------------------------------------
       # 4. Debug parsed values
+      # -----------------------------------------------------------
       - name: Debug parsed values
         run: |
-          echo "CLIENT = ${{ steps.parsed.outputs.client_id }}"
-          echo "TENANT = ${{ steps.parsed.outputs.tenant_id }}"
-          echo "SUBSCRIPTION = ${{ steps.parsed.outputs.subscription_id }}"
+          echo "Parsed Storage: ${{ steps.parsed.outputs.storage_name }}"
+          echo "Parsed RG: ${{ steps.parsed.outputs.resource_group }}"
+          echo "Parsed Location: ${{ steps.parsed.outputs.location }}"
+          echo "CLIENT: ${{ steps.parsed.outputs.client_id }}"
+          echo "TENANT: ${{ steps.parsed.outputs.tenant_id }}"
+          echo "SUB: ${{ steps.parsed.outputs.subscription_id }}"
 
-      # 5. Azure login with OIDC
+      # -----------------------------------------------------------
+      # 5. Azure Login using OIDC
+      # -----------------------------------------------------------
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -77,14 +97,18 @@ jobs:
           tenant-id: ${{ steps.parsed.outputs.tenant_id }}
           subscription-id: ${{ steps.parsed.outputs.subscription_id }}
 
-      # 6. Create resource group
+      # -----------------------------------------------------------
+      # 6. Create Resource Group
+      # -----------------------------------------------------------
       - name: Create Resource Group
         run: |
           az group create \
             --name "${{ steps.parsed.outputs.resource_group }}" \
             --location "${{ steps.parsed.outputs.location }}"
 
-      # 7. Create storage account
+      # -----------------------------------------------------------
+      # 7. Create Storage Account
+      # -----------------------------------------------------------
       - name: Create Storage Account
         id: storage
         run: |
@@ -101,8 +125,10 @@ jobs:
 
           echo "sa_key=$KEY" >> $GITHUB_OUTPUT
 
-      # 8. Check if repo creation is needed
-      - name: Check if repo creation should be skipped
+      # -----------------------------------------------------------
+      # 8. Check if GitHub repo creation should run
+      # -----------------------------------------------------------
+      - name: Check repo create conditions
         id: checkrepo
         run: |
           if [[ -z "${{ steps.parsed.outputs.gh_account }}" || -z "${{ steps.parsed.outputs.gh_token }}" || -z "${{ steps.parsed.outputs.output_repo }}" ]]; then
@@ -111,7 +137,9 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      # 9. Create GitHub repo (optional)
+      # -----------------------------------------------------------
+      # 9. Create GitHub Repo (Optional)
+      # -----------------------------------------------------------
       - name: Create GitHub Repo
         if: ${{ steps.checkrepo.outputs.skip == 'false' }}
         env:
@@ -122,7 +150,9 @@ jobs:
             --private \
             --description "Auto-generated repo for ${{ steps.parsed.outputs.storage_name }}"
 
-      # 10. Push metadata (optional)
+      # -----------------------------------------------------------
+      # 10. Push metadata file to repo
+      # -----------------------------------------------------------
       - name: Push Metadata File
         if: ${{ steps.checkrepo.outputs.skip == 'false' }}
         run: |
