@@ -40,13 +40,12 @@ jobs:
       - name: Parse Issue Form Inputs
         id: parsed
         run: |
-          BODY=$(jq -r '.body' <<< "${{ steps.issue.outputs.data }}")
+          BODY="$(jq -r '.body' <<< "${{ steps.issue.outputs.data }}")"
 
           echo "---- ISSUE BODY START ----"
           echo "$BODY"
           echo "---- ISSUE BODY END ----"
 
-          # Universal field parser (works on macOS + Linux)
           parse_field() {
             echo "$BODY" | awk -v header="$1" '
               $0 ~ header {found=1; next}
@@ -73,6 +72,7 @@ jobs:
           echo "gh_account=$GH_ACCOUNT" >> $GITHUB_OUTPUT
           echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
           echo "output_repo=$OUTPUT_REPO" >> $GITHUB_OUTPUT
+
 
       # -----------------------------------------------------------
       # 4. Debug parsed values
