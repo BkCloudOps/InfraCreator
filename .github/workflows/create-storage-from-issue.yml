@@ -32,6 +32,13 @@ jobs:
       # -------------------------------------------------------
       # 2. Parse issue form values
       # -------------------------------------------------------
+      - name: Show full issue body
+        run: |
+          BODY=$(jq -r '.body' <<< "${{ steps.issue.outputs.data }}")
+          echo "---- ISSUE BODY START ----"
+          echo "$BODY"
+          echo "---- ISSUE BODY END ----"
+
       - name: Parse Issue Form Inputs
         id: parsed
         run: |
