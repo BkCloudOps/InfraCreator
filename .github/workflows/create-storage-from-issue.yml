@@ -37,19 +37,19 @@ jobs:
     - name: Parse Issue Form Inputs
       id: parsed
       run: |
-        ISSUE_BODY=$(echo '${{ steps.issue.outputs.data }}' | jq -r '.body')
-
-        STORAGE_NAME=$(echo "$ISSUE_BODY" | grep -A1 "Storage Account Name" | tail -1 | xargs)
-        RG=$(echo "$ISSUE_BODY" | grep -A1 "Resource Group Name" | tail -1 | xargs)
-        LOCATION=$(echo "$ISSUE_BODY" | grep -A1 "Azure Location" | tail -1 | xargs)
-        CLIENT_ID=$(echo "$ISSUE_BODY" | grep -A1 "Azure Client ID" | tail -1 | xargs)
-        TENANT_ID=$(echo "$ISSUE_BODY" | grep -A1 "Azure Tenant ID" | tail -1 | xargs)
-        SUB_ID=$(echo "$ISSUE_BODY" | grep -A1 "Azure Subscription ID" | tail -1 | xargs)
-
-        GH_ACC=$(echo "$ISSUE_BODY" | grep -A1 "GitHub Account Name" | tail -1 | xargs)
-        GH_TOKEN=$(echo "$ISSUE_BODY" | grep -A1 "GitHub Token" | tail -1 | xargs)
-        REPO_NAME=$(echo "$ISSUE_BODY" | grep -A1 "Output Repo Name" | tail -1 | xargs)
-
+        BODY=$(echo '${{ steps.issue.outputs.data }}' | jq -r '.body')
+    
+        STORAGE_NAME=$(echo "$BODY" | sed -n '/Storage Account Name/{n;p}' | xargs)
+        RG=$(echo "$BODY" | sed -n '/Resource Group Name/{n;p}' | xargs)
+        LOCATION=$(echo "$BODY" | sed -n '/Azure Location/{n;p}' | xargs)
+        CLIENT_ID=$(echo "$BODY" | sed -n '/Azure Client ID/{n;p}' | xargs)
+        TENANT_ID=$(echo "$BODY" | sed -n '/Azure Tenant ID/{n;p}' | xargs)
+        SUB_ID=$(echo "$BODY" | sed -n '/Azure Subscription ID/{n;p}' | xargs)
+    
+        GH_ACC=$(echo "$BODY" | sed -n '/GitHub Account Name/{n;p}' | xargs)
+        GH_TOKEN=$(echo "$BODY" | sed -n '/GitHub Token/{n;p}' | xargs)
+        REPO_NAME=$(echo "$BODY" | sed -n '/Output Repo Name/{n;p}' | xargs)
+    
         echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
         echo "rg=$RG" >> $GITHUB_OUTPUT
         echo "location=$LOCATION" >> $GITHUB_OUTPUT
@@ -59,6 +59,7 @@ jobs:
         echo "gh_acc=$GH_ACC" >> $GITHUB_OUTPUT
         echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
         echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+
 
     # -------------------------------------------------------
     # 3. Azure OIDC Login
@@ -70,6 +71,7 @@ jobs:
         client-id: ${{ steps.parsed.outputs.client_id }}
         tenant-id: ${{ steps.parsed.outputs.tenant_id }}
         subscription-id: ${{ steps.parsed.outputs.sub_id }}
+
 
 
     # -------------------------------------------------------
