@@ -50,19 +50,16 @@ body:
     id: github_account
     attributes:
       label: GitHub Account Name
-    validations:
-      required: true
+
 
   - type: input
     id: github_token
     attributes:
       label: GitHub Token (PAT)
-    validations:
-      required: true
+
 
   - type: input
     id: repo_name
     attributes:
       label: Output Repo Name
-    validations:
-      required: true
+
