@@ -66,9 +66,11 @@ jobs:
     - name: Azure Login (OIDC)
       uses: azure/login@v2
       with:
+        auth-type: IDENTITY
         client-id: ${{ steps.parsed.outputs.client_id }}
         tenant-id: ${{ steps.parsed.outputs.tenant_id }}
         subscription-id: ${{ steps.parsed.outputs.sub_id }}
+
 
     # -------------------------------------------------------
     # 4. Create resource group
