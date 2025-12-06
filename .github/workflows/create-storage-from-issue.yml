@@ -46,22 +46,21 @@ jobs:
         id: extract
         run: |
           ISSUE_BODY="${{ github.event.issue.body }}"
-
-          # Functions for extraction using grep/sed
+          echo "$ISSUE_BODY"
           extract_field() {
-            echo "$ISSUE_BODY" | sed -n "/^### $1/{n;p;}" | xargs
+            echo "$ISSUE_BODY" | sed -n "/^### $1/{n;n;p;}" | xargs
           }
-
+          
           echo "storage_name=$(extract_field "Storage Account Name")" >> "$GITHUB_OUTPUT"
-          echo $storage_name
           echo "resource_group=$(extract_field "Resource Group Name")" >> "$GITHUB_OUTPUT"
           echo "location=$(extract_field "Azure Location")" >> "$GITHUB_OUTPUT"
           echo "client_id=$(extract_field "Azure Client ID")" >> "$GITHUB_OUTPUT"
           echo "tenant_id=$(extract_field "Azure Tenant ID")" >> "$GITHUB_OUTPUT"
           echo "subscription_id=$(extract_field "Azure Subscription ID")" >> "$GITHUB_OUTPUT"
           echo "gh_account=$(extract_field "GitHub Account Name")" >> "$GITHUB_OUTPUT"
-          echo "gh_token=$(extract_field "GitHub Token")" >> "$GITHUB_OUTPUT"
+          echo "gh_token=$(extract_field "GitHub Token (PAT)")" >> "$GITHUB_OUTPUT"
           echo "output_repo=$(extract_field "Output Repo Name")" >> "$GITHUB_OUTPUT"
+
 
       - name: Show all extracted values (for debugging)
         run: |
