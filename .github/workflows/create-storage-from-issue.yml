@@ -62,31 +62,21 @@ jobs:
           echo "output_repo=$(extract_field "Output Repo Name")" >> "$GITHUB_OUTPUT"
 
 
-      - name: Show all extracted values (for debugging)
-        run: |
-          echo "Storage Name: ${{ steps.extract.outputs.storage_name }}"
-          echo "Resource Group: ${{ steps.extract.outputs.resource_group }}"
-          echo "Location: ${{ steps.extract.outputs.location }}"
-          echo "Client ID: ${{ steps.extract.outputs.client_id }}"
-          echo "Tenant ID: ${{ steps.extract.outputs.tenant_id }}"
-          echo "Subscription ID: ${{ steps.extract.outputs.subscription_id }}"
-          echo "GitHub Account: ${{ steps.extract.outputs.gh_account }}"
-          echo "GitHub Token: ${{ steps.extract.outputs.gh_token }}"
-          echo "Output Repo: ${{ steps.extract.outputs.output_repo }}"
-
-
-
       # -----------------------------------------------------------
       # 4. Debug parsed values
       # -----------------------------------------------------------
       - name: Debug parsed values
         run: |
-          echo "Parsed Storage: ${{ steps.parsed.outputs.storage_name }}"
-          echo "Parsed RG: ${{ steps.parsed.outputs.resource_group }}"
-          echo "Parsed Location: ${{ steps.parsed.outputs.location }}"
-          echo "CLIENT: ${{ steps.parsed.outputs.client_id }}"
-          echo "TENANT: ${{ steps.parsed.outputs.tenant_id }}"
-          echo "SUB: ${{ steps.parsed.outputs.subscription_id }}"
+          echo "Storage Name: ${{ steps.parsed.outputs.storage_name }}"
+          echo "Resource Group: ${{ steps.parsed.outputs.resource_group }}"
+          echo "Location: ${{ steps.parsed.outputs.location }}"
+          echo "Client ID: ${{ steps.parsed.outputs.client_id }}"
+          echo "Tenant ID: ${{ steps.parsed.outputs.tenant_id }}"
+          echo "Subscription ID: ${{ steps.parsed.outputs.subscription_id }}"
+          echo "GitHub Account: ${{ steps.parsed.outputs.gh_account }}"
+          echo "GitHub Token: ${{ steps.parsed.outputs.gh_token }}"
+          echo "Output Repo: ${{ steps.parsed.outputs.output_repo }}"
+
 
       # -----------------------------------------------------------
       # 5. Azure Login using OIDC
