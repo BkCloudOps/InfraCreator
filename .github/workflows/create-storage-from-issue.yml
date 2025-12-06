@@ -31,8 +31,8 @@ jobs:
       # -----------------------------------------------------------
       # 2. Debug (optional)
       # -----------------------------------------------------------
-      - name: Show raw issue JSON
-        run: echo "${{ steps.issue.outputs.data }}"
+      # - name: Show raw issue JSON
+      #   run: echo "${{ steps.issue.outputs.data }}"
 
       # -----------------------------------------------------------
       # 3. Parse Issue Body Fields (MAC SAFE + LINUX SAFE)
