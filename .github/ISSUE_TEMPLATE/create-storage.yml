@@ -1,5 +1,6 @@
 name: Create Azure Storage via Issue
 title: "Create Storage - "
+description: Form to create Azure storage + GitHub repo automatically
 labels: ["storage-auto"]
 body:
   - type: input
