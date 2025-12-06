@@ -1,8 +1,8 @@
 name: Create Azure Storage from Issue
 
 on:
-  issues:
-    types: [opened]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
@@ -12,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: contains(github.event.comment.body, 'create')
 
     steps:
 
