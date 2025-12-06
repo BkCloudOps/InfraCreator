@@ -1,0 +1,119 @@
+name: Create Azure Storage from Issue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: read
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract issue JSON
+        id: issue
+        run: echo "data<<EOF" >> $GITHUB_OUTPUT && \
+             echo '${{ toJson(github.event.issue) }}' >> $GITHUB_OUTPUT && \
+             echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Parse Issue Form Inputs
+        id: parsed
+        run: |
+          ISSUE_BODY=$(echo '${{ steps.issue.outputs.data }}' | jq -r '.body')
+
+          STORAGE_NAME=$(echo "$ISSUE_BODY"       | grep -i 'storage_name:'        | awk '{print $2}')
+          RG=$(echo "$ISSUE_BODY"                 | grep -i 'resource_group:'      | awk '{print $2}')
+          LOCATION=$(echo "$ISSUE_BODY"           | grep -i 'location:'            | awk '{print $2}')
+          CLIENT_ID=$(echo "$ISSUE_BODY"          | grep -i 'azure_client_id:'     | awk '{print $2}')
+          TENANT_ID=$(echo "$ISSUE_BODY"          | grep -i 'azure_tenant_id:'     | awk '{print $2}')
+          SUB_ID=$(echo "$ISSUE_BODY"             | grep -i 'azure_subscription_id:' | awk '{print $2}')
+
+          GH_ACC=$(echo "$ISSUE_BODY"             | grep -i 'github_account:'      | awk '{print $2}')
+          GH_TOKEN=$(echo "$ISSUE_BODY"           | grep -i 'github_token:'        | awk '{print $2}')
+          REPO_NAME=$(echo "$ISSUE_BODY"          | grep -i 'repo_name:'           | awk '{print $2}')
+
+          echo "storage_name=$STORAGE_NAME" >> $GITHUB_OUTPUT
+          echo "rg=$RG" >> $GITHUB_OUTPUT
+          echo "location=$LOCATION" >> $GITHUB_OUTPUT
+          echo "client_id=$CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "tenant_id=$TENANT_ID" >> $GITHUB_OUTPUT
+          echo "sub_id=$SUB_ID" >> $GITHUB_OUTPUT
+          echo "gh_acc=$GH_ACC" >> $GITHUB_OUTPUT
+          echo "gh_token=$GH_TOKEN" >> $GITHUB_OUTPUT
+          echo "repo_name=$REPO_NAME" >> $GITHUB_OUTPUT
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ steps.parsed.outputs.client_id }}
+          tenant-id: ${{ steps.parsed.outputs.tenant_id }}
+          subscription-id: ${{ steps.parsed.outputs.sub_id }}
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name "${{ steps.parsed.outputs.rg }}" \
+            --location "${{ steps.parsed.outputs.location }}"
+
+      - name: Create Storage Account
+        id: storage
+        run: |
+          az storage account create \
+            --name "${{ steps.parsed.outputs.storage_name }}" \
+            --resource-group "${{ steps.parsed.outputs.rg }}" \
+            --location "${{ steps.parsed.outputs.location }}" \
+            --sku Standard_LRS
+
+          KEY=$(az storage account keys list \
+            --resource-group "${{ steps.parsed.outputs.rg }}" \
+            --account-name "${{ steps.parsed.outputs.storage_name }}" \
+            --query '[0].value' -o tsv)
+
+          echo "sa_key=$KEY" >> $GITHUB_OUTPUT
+
+      - name: Check if repo creation should be skipped
+        id: checkrepo
+        run: |
+          if [[ -z "${{ steps.parsed.outputs.gh_acc }}" || -z "${{ steps.parsed.outputs.gh_token }}" || -z "${{ steps.parsed.outputs.repo_name }}" ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Repo
+        if: steps.checkrepo.outputs.skip == 'false'
+        run: |
+          echo "${{ steps.parsed.outputs.gh_token }}" | gh auth login --with-token
+
+          gh repo create "${{ steps.parsed.outputs.gh_acc }}/${{ steps.parsed.outputs.repo_name }}" \
+            --private \
+            --description "Auto-generated repo for storage account ${{ steps.parsed.outputs.storage_name }}"
+
+      - name: Push Metadata File
+        if: steps.checkrepo.outputs.skip == 'false'
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "github-actions"
+
+          git clone "https://github.com/${{ steps.parsed.outputs.gh_acc }}/${{ steps.parsed.outputs.repo_name }}" repo
+          cd repo
+
+          cat <<EOF > metadata.json
+          {
+            "storage_account": "${{ steps.parsed.outputs.storage_name }}",
+            "resource_group": "${{ steps.parsed.outputs.rg }}",
+            "location": "${{ steps.parsed.outputs.location }}",
+            "subscription_id": "${{ steps.parsed.outputs.sub_id }}",
+            "tenant_id": "${{ steps.parsed.outputs.tenant_id }}",
+            "client_id": "${{ steps.parsed.outputs.client_id }}",
+            "storage_key": "${{ steps.storage.outputs.sa_key }}"
+          }
+          EOF
+
+          git add metadata.json
+          git commit -m "Add auto-generated metadata"
+          git push
