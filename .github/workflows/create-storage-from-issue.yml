@@ -81,7 +81,6 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          auth-type: IDENTITY
           client-id: ${{ steps.extract.outputs.client_id }}
           tenant-id: ${{ steps.extract.outputs.tenant_id }}
           subscription-id: ${{ steps.extract.outputs.subscription_id }}
