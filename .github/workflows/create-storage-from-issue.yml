@@ -100,18 +100,29 @@ jobs:
       - name: Create Storage Account
         id: storage
         run: |
+          # sanitize storage account name (Azure rules)
+          RAW_NAME="${{ steps.extract.outputs.storage_name }}"
+          SA_NAME=$(echo "$RAW_NAME" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')
+          
+          # enforce length requirements (optional but safe)
+          SA_NAME=$(echo "$SA_NAME" | cut -c1-24)
+      
+          echo "Sanitized storage name: $SA_NAME"
+      
           az storage account create \
-            --name "${{ steps.extract.outputs.storage_name }}" \
+            --name "$SA_NAME" \
             --resource-group "${{ steps.extract.outputs.resource_group }}" \
             --location "${{ steps.extract.outputs.location }}" \
             --sku Standard_LRS
-
+      
           KEY=$(az storage account keys list \
             --resource-group "${{ steps.extract.outputs.resource_group }}" \
-            --account-name "${{ steps.extract.outputs.storage_name }}" \
+            --account-name "$SA_NAME" \
             --query '[0].value' -o tsv)
-
+      
           echo "sa_key=$KEY" >> $GITHUB_OUTPUT
+          echo "final_sa_name=$SA_NAME" >> $GITHUB_OUTPUT
+
 
       # -----------------------------------------------------------
       # 8. Check Conditional Repo Create Inputs
