@@ -1,4 +1,4 @@
-name: Flux Bootstrap AKS from Issue
+name: Flux Bootstrap AKS (Manual Approval)
 
 on:
   issue_comment:
@@ -7,37 +7,23 @@ on:
 permissions:
   contents: write
   issues: read
-  id-token: write
 
 jobs:
   flux-bootstrap:
     runs-on: ubuntu-latest
-    if: ${{ contains(github.event.comment.body, 'bootstrap') }}
+
+    # 🔐 Manual approval gate
+    environment: flux-bootstrap
+
+    # ✅ STRICT CONDITIONS
+    if: >
+      github.event.comment.body == '/flux-bootstrap' &&
+      contains(join(github.event.issue.labels.*.name, ','), 'flux-bootstrap')
 
     steps:
 
       # -----------------------------------------------------------
-      # 1. Extract Issue JSON (UNCHANGED PATTERN)
-      # -----------------------------------------------------------
-      - name: Extract issue JSON
-        id: issue
-        run: |
-          ISSUE_JSON='${{ toJson(github.event.issue) }}'
-          {
-            echo "data<<EOF"
-            echo "$ISSUE_JSON"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      # -----------------------------------------------------------
-      # 2. Debug Issue Body
-      # -----------------------------------------------------------
-      - name: Dump issue body
-        run: |
-          echo "${{ github.event.issue.body }}"
-
-      # -----------------------------------------------------------
-      # 3. Extract values from Issue Form (SAME LOGIC)
+      # 1. Extract values from Issue Form (YOUR WORKING LOGIC)
       # -----------------------------------------------------------
       - name: Extract values from issue body
         id: extract
@@ -56,29 +42,18 @@ jobs:
           echo "flux_path=$(extract_field 'Flux Path')" >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------
-      # 4. Debug parsed values
-      # -----------------------------------------------------------
-      - name: Debug parsed values
-        run: |
-          echo "AKS RG:        '${{ steps.extract.outputs.aks_rg }}'"
-          echo "AKS Name:      '${{ steps.extract.outputs.aks_name }}'"
-          echo "GitHub Owner:  '${{ steps.extract.outputs.github_owner }}'"
-          echo "GitHub Repo:   '${{ steps.extract.outputs.github_repo }}'"
-          echo "GitHub Branch: '${{ steps.extract.outputs.github_branch }}'"
-          echo "Flux Path:     '${{ steps.extract.outputs.flux_path }}'"
-
-      # -----------------------------------------------------------
-      # 5. Azure Login (OIDC – FROM SECRETS)
+      # 2. Azure Login (SERVICE PRINCIPAL)
       # -----------------------------------------------------------
       - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # -----------------------------------------------------------
-      # 6. Get AKS Credentials
+      # 3. Get AKS Credentials
       # -----------------------------------------------------------
       - name: Get AKS credentials
         run: |
@@ -88,14 +63,14 @@ jobs:
             --overwrite-existing
 
       # -----------------------------------------------------------
-      # 7. Install Flux CLI
+      # 4. Install Flux CLI
       # -----------------------------------------------------------
       - name: Install Flux CLI
         run: |
           curl -s https://fluxcd.io/install.sh | sudo bash
 
       # -----------------------------------------------------------
-      # 8. Flux Bootstrap
+      # 5. Flux Bootstrap
       # -----------------------------------------------------------
       - name: Flux Bootstrap
         env:
