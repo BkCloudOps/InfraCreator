@@ -16,9 +16,7 @@ jobs:
     environment: flux-bootstrap
 
     # ✅ STRICT CONDITIONS
-    if: >
-      github.event.comment.body == '/flux-bootstrap' &&
-      contains(join(github.event.issue.labels.*.name, ','), 'flux-bootstrap')
+    if: contains(github.event.comment.body, '/bootstrap')
 
     steps:
 
