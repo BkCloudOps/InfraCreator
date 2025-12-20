@@ -11,7 +11,7 @@ permissions:
 jobs:
   aks-create:
     runs-on: ubuntu-latest
-    environment: aks-create
+    # environment: aks-create
     if: |
       github.event.issue.pull_request == null &&
       contains(github.event.comment.body, '/aks-create') &&
