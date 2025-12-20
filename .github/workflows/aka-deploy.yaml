@@ -11,14 +11,10 @@ permissions:
 jobs:
   aks-create:
     runs-on: ubuntu-latest
-
-    # 🔐 Manual approval gate
     environment: aks-create
-
-    # ✅ STRICT CONDITIONS
     if: |
       github.event.issue.pull_request == null &&
-      startsWith(github.event.comment.body, '/aks-create') &&
+      contains(github.event.comment.body, '/aks-create') &&
       contains(github.event.issue.labels.*.name, 'aks-create')
 
 
