@@ -1,87 +1,110 @@
-name: Flux Bootstrap AKS (Approved)
+name: Flux Bootstrap AKS from Issue
 
 on:
-  issues:
-    types: [opened]
+  issue_comment:
+    types: [created]
 
 permissions:
-  id-token: write
   contents: write
   issues: read
+  id-token: write
 
 jobs:
   flux-bootstrap:
     runs-on: ubuntu-latest
-
-    # 🔐 Manual approval gate
-    environment: flux-bootstrap
-
-    env:
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+    if: ${{ contains(github.event.comment.body, 'bootstrap') }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
 
-      # -----------------------------
-      # Parse Issue Form Values
-      # -----------------------------
-      - name: Parse issue form
+      # -----------------------------------------------------------
+      # 1. Extract Issue JSON (UNCHANGED PATTERN)
+      # -----------------------------------------------------------
+      - name: Extract issue JSON
+        id: issue
         run: |
-          BODY="${{ github.event.issue.body }}"
+          ISSUE_JSON='${{ toJson(github.event.issue) }}'
+          {
+            echo "data<<EOF"
+            echo "$ISSUE_JSON"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-          AKS_RG=$(echo "$BODY" | grep -i "AKS Resource Group" | cut -d':' -f2 | xargs)
-          AKS_NAME=$(echo "$BODY" | grep -i "AKS Cluster Name" | cut -d':' -f2 | xargs)
-          GITHUB_OWNER=$(echo "$BODY" | grep -i "GitHub Owner" | cut -d':' -f2 | xargs)
-          GITHUB_REPO=$(echo "$BODY" | grep -i "GitHub Repository" | cut -d':' -f2 | xargs)
-          GITHUB_BRANCH=$(echo "$BODY" | grep -i "Git Branch" | cut -d':' -f2 | xargs)
-          FLUX_PATH=$(echo "$BODY" | grep -i "Flux Path" | cut -d':' -f2 | xargs)
+      # -----------------------------------------------------------
+      # 2. Debug Issue Body
+      # -----------------------------------------------------------
+      - name: Dump issue body
+        run: |
+          echo "${{ github.event.issue.body }}"
 
-          echo "AKS_RG=$AKS_RG" >> $GITHUB_ENV
-          echo "AKS_NAME=$AKS_NAME" >> $GITHUB_ENV
-          echo "GITHUB_OWNER=$GITHUB_OWNER" >> $GITHUB_ENV
-          echo "GITHUB_REPO=$GITHUB_REPO" >> $GITHUB_ENV
-          echo "GITHUB_BRANCH=${GITHUB_BRANCH:-main}" >> $GITHUB_ENV
-          echo "FLUX_PATH=$FLUX_PATH" >> $GITHUB_ENV
+      # -----------------------------------------------------------
+      # 3. Extract values from Issue Form (SAME LOGIC)
+      # -----------------------------------------------------------
+      - name: Extract values from issue body
+        id: extract
+        run: |
+          ISSUE_BODY="${{ github.event.issue.body }}"
 
-      # -----------------------------
-      # Azure Login (OIDC)
-      # -----------------------------
+          extract_field() {
+            echo "$ISSUE_BODY" | sed -n "/^### $1/{n;n;p;}" | xargs
+          }
+
+          echo "aks_rg=$(extract_field 'AKS Resource Group')" >> "$GITHUB_OUTPUT"
+          echo "aks_name=$(extract_field 'AKS Cluster Name')" >> "$GITHUB_OUTPUT"
+          echo "github_owner=$(extract_field 'GitHub Owner')" >> "$GITHUB_OUTPUT"
+          echo "github_repo=$(extract_field 'GitHub Repository')" >> "$GITHUB_OUTPUT"
+          echo "github_branch=$(extract_field 'Git Branch')" >> "$GITHUB_OUTPUT"
+          echo "flux_path=$(extract_field 'Flux Path')" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------
+      # 4. Debug parsed values
+      # -----------------------------------------------------------
+      - name: Debug parsed values
+        run: |
+          echo "AKS RG:        '${{ steps.extract.outputs.aks_rg }}'"
+          echo "AKS Name:      '${{ steps.extract.outputs.aks_name }}'"
+          echo "GitHub Owner:  '${{ steps.extract.outputs.github_owner }}'"
+          echo "GitHub Repo:   '${{ steps.extract.outputs.github_repo }}'"
+          echo "GitHub Branch: '${{ steps.extract.outputs.github_branch }}'"
+          echo "Flux Path:     '${{ steps.extract.outputs.flux_path }}'"
+
+      # -----------------------------------------------------------
+      # 5. Azure Login (OIDC – FROM SECRETS)
+      # -----------------------------------------------------------
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # -----------------------------
-      # AKS Access
-      # -----------------------------
+      # -----------------------------------------------------------
+      # 6. Get AKS Credentials
+      # -----------------------------------------------------------
       - name: Get AKS credentials
         run: |
           az aks get-credentials \
-            --resource-group $AKS_RG \
-            --name $AKS_NAME \
+            --resource-group "${{ steps.extract.outputs.aks_rg }}" \
+            --name "${{ steps.extract.outputs.aks_name }}" \
             --overwrite-existing
 
-      # -----------------------------
-      # Install Flux
-      # -----------------------------
+      # -----------------------------------------------------------
+      # 7. Install Flux CLI
+      # -----------------------------------------------------------
       - name: Install Flux CLI
         run: |
           curl -s https://fluxcd.io/install.sh | sudo bash
 
-      # -----------------------------
-      # Flux Bootstrap
-      # -----------------------------
-      - name: Bootstrap Flux
+      # -----------------------------------------------------------
+      # 8. Flux Bootstrap
+      # -----------------------------------------------------------
+      - name: Flux Bootstrap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           flux bootstrap github \
-            --owner=$GITHUB_OWNER \
-            --repository=$GITHUB_REPO \
-            --branch=$GITHUB_BRANCH \
-            --path=$FLUX_PATH \
+            --owner="${{ steps.extract.outputs.github_owner }}" \
+            --repository="${{ steps.extract.outputs.github_repo }}" \
+            --branch="${{ steps.extract.outputs.github_branch || 'main' }}" \
+            --path="${{ steps.extract.outputs.flux_path }}" \
             --personal=false \
             --components-extra=image-reflector-controller,image-automation-controller
