@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     # environment: aks-create
     if: |
-      github.event.issue.pull_request == null &&
+      # github.event.issue.pull_request == null &&
       contains(github.event.comment.body, '/aks-create') &&
-      contains(github.event.issue.labels.*.name, 'aks-create')
+      # contains(github.event.issue.labels.*.name, 'aks-create')
 
 
     steps:
