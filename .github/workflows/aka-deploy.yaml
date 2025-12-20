@@ -2,7 +2,7 @@ name: Create AKS Cluster (Manual Approval)
 
 on:
   issue_comment:
-    types: [opened]
+    types: [created]
 
 permissions:
   contents: read
@@ -15,8 +15,8 @@ jobs:
     environment: aks-create
     if: |
       github.event.issue.pull_request == null &&
-      contains(github.event.comment.body, '/aks-create') &&
-      contains(github.event.issue.labels.*.name, 'aks-create')
+      contains(join(github.event.issue.labels.*.name, ','), 'aks-create') &&
+      github.event.comment.body == '/create-aks'
 
 
     steps:
