@@ -17,8 +17,9 @@ jobs:
 
     # ✅ STRICT CONDITIONS
     if: >
-      github.event.comment.body == '/aks-create' &&
+      contains(github.event.comment.body, '/aks-create') &&
       contains(join(github.event.issue.labels.*.name, ','), 'aks-create')
+
 
     steps:
 
