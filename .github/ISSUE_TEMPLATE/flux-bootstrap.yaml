@@ -2,9 +2,7 @@ name: Flux Bootstrap AKS
 description: Bootstrap Flux on an AKS cluster using GitHub Actions
 title: "Flux Bootstrap – <cluster-name>"
 labels:
-  - flux
-  - gitops
-  - aks
+  - flux-bootstrap
 
 body:
   - type: input
