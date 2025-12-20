@@ -11,13 +11,7 @@ permissions:
 jobs:
   aks-delete:
     runs-on: ubuntu-latest
-
-    # ✅ STRICT CONDITIONS
-    # - Exact command
-    # - Same AKS create template
-    if: >
-      github.event.comment.body == '/delete-aks' &&
-      contains(join(github.event.issue.labels.*.name, ','), 'aks-create')
+    if: contains(github.event.comment.body, '/delete')
 
     steps:
 
