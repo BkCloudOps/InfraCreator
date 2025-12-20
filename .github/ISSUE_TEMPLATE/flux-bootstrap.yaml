@@ -1,0 +1,71 @@
+name: Flux Bootstrap AKS
+description: Bootstrap Flux on an AKS cluster using GitHub Actions
+title: "Flux Bootstrap – <cluster-name>"
+labels:
+  - flux
+  - gitops
+  - aks
+
+body:
+  - type: input
+    id: aks_rg
+    attributes:
+      label: AKS Resource Group
+      description: Resource group where the AKS cluster exists
+      placeholder: aks-prod-rg
+    validations:
+      required: true
+
+  - type: input
+    id: aks_name
+    attributes:
+      label: AKS Cluster Name
+      description: Name of the AKS cluster
+      placeholder: aks-prod
+    validations:
+      required: true
+
+  - type: input
+    id: github_owner
+    attributes:
+      label: GitHub Owner
+      description: GitHub org or user that owns the Flux repo
+      placeholder: my-org
+    validations:
+      required: true
+
+  - type: input
+    id: github_repo
+    attributes:
+      label: GitHub Repository
+      description: Repository used for Flux GitOps
+      placeholder: flux-gitops
+    validations:
+      required: true
+
+  - type: input
+    id: github_branch
+    attributes:
+      label: Git Branch
+      description: Branch to use (default: main)
+      placeholder: main
+      value: main
+    validations:
+      required: true
+
+  - type: input
+    id: flux_path
+    attributes:
+      label: Flux Path
+      description: Path inside repo where cluster manifests will live
+      placeholder: clusters/aks-prod
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I confirm the AKS cluster exists and I have approval to bootstrap Flux
+          required: true
