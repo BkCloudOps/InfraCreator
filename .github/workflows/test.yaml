@@ -1,0 +1,21 @@
+name: Create AKS Cluster
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  id-token: write
+
+jobs:
+  create-aks:
+    runs-on: ubuntu-latest
+    if: |
+      github.event.issue.pull_request == null &&
+      contains(github.event.comment.body, '/create-aks') &&
+      contains(join(github.event.issue.labels.*.name, ','), 'aks-create')
+
+    steps:
+      - run: echo "AKS workflow triggered"
