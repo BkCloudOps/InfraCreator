@@ -1,0 +1,87 @@
+name: Flux Bootstrap AKS (Approved)
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  id-token: write
+  contents: write
+  issues: read
+
+jobs:
+  flux-bootstrap:
+    runs-on: ubuntu-latest
+
+    # 🔐 Manual approval gate
+    environment: flux-bootstrap
+
+    env:
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # -----------------------------
+      # Parse Issue Form Values
+      # -----------------------------
+      - name: Parse issue form
+        run: |
+          BODY="${{ github.event.issue.body }}"
+
+          AKS_RG=$(echo "$BODY" | grep -i "AKS Resource Group" | cut -d':' -f2 | xargs)
+          AKS_NAME=$(echo "$BODY" | grep -i "AKS Cluster Name" | cut -d':' -f2 | xargs)
+          GITHUB_OWNER=$(echo "$BODY" | grep -i "GitHub Owner" | cut -d':' -f2 | xargs)
+          GITHUB_REPO=$(echo "$BODY" | grep -i "GitHub Repository" | cut -d':' -f2 | xargs)
+          GITHUB_BRANCH=$(echo "$BODY" | grep -i "Git Branch" | cut -d':' -f2 | xargs)
+          FLUX_PATH=$(echo "$BODY" | grep -i "Flux Path" | cut -d':' -f2 | xargs)
+
+          echo "AKS_RG=$AKS_RG" >> $GITHUB_ENV
+          echo "AKS_NAME=$AKS_NAME" >> $GITHUB_ENV
+          echo "GITHUB_OWNER=$GITHUB_OWNER" >> $GITHUB_ENV
+          echo "GITHUB_REPO=$GITHUB_REPO" >> $GITHUB_ENV
+          echo "GITHUB_BRANCH=${GITHUB_BRANCH:-main}" >> $GITHUB_ENV
+          echo "FLUX_PATH=$FLUX_PATH" >> $GITHUB_ENV
+
+      # -----------------------------
+      # Azure Login (OIDC)
+      # -----------------------------
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      # -----------------------------
+      # AKS Access
+      # -----------------------------
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group $AKS_RG \
+            --name $AKS_NAME \
+            --overwrite-existing
+
+      # -----------------------------
+      # Install Flux
+      # -----------------------------
+      - name: Install Flux CLI
+        run: |
+          curl -s https://fluxcd.io/install.sh | sudo bash
+
+      # -----------------------------
+      # Flux Bootstrap
+      # -----------------------------
+      - name: Bootstrap Flux
+        run: |
+          flux bootstrap github \
+            --owner=$GITHUB_OWNER \
+            --repository=$GITHUB_REPO \
+            --branch=$GITHUB_BRANCH \
+            --path=$FLUX_PATH \
+            --personal=false \
+            --components-extra=image-reflector-controller,image-automation-controller
