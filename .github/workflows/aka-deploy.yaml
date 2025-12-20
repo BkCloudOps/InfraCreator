@@ -1,0 +1,91 @@
+name: Create AKS Cluster (Manual Approval)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  aks-create:
+    runs-on: ubuntu-latest
+
+    # 🔐 Manual approval gate
+    environment: aks-create
+
+    # ✅ STRICT CONDITIONS
+    if: >
+      github.event.comment.body == '/aks-create' &&
+      contains(join(github.event.issue.labels.*.name, ','), 'aks-create')
+
+    steps:
+
+      # -----------------------------------------------------------
+      # 1. Extract values from Issue Form (YOUR WORKING PATTERN)
+      # -----------------------------------------------------------
+      - name: Extract values from issue body
+        id: extract
+        run: |
+          ISSUE_BODY="${{ github.event.issue.body }}"
+
+          extract_field() {
+            echo "$ISSUE_BODY" | sed -n "/^### $1/{n;n;p;}" | xargs
+          }
+
+          echo "resource_group=$(extract_field 'Resource Group Name')" >> "$GITHUB_OUTPUT"
+          echo "aks_name=$(extract_field 'AKS Cluster Name')" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------
+      # 2. Debug parsed values
+      # -----------------------------------------------------------
+      - name: Debug parsed values
+        run: |
+          echo "Resource Group: ${{ steps.extract.outputs.resource_group }}"
+          echo "AKS Name:       ${{ steps.extract.outputs.aks_name }}"
+
+      # -----------------------------------------------------------
+      # 3. Azure Login (SERVICE PRINCIPAL)
+      # -----------------------------------------------------------
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # -----------------------------------------------------------
+      # 4. Create Resource Group (idempotent)
+      # -----------------------------------------------------------
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name "${{ steps.extract.outputs.resource_group }}" \
+            --location "canadacentral"
+
+      # -----------------------------------------------------------
+      # 5. Create AKS Cluster (FIXED NODE POOL)
+      # -----------------------------------------------------------
+      - name: Create AKS Cluster
+        run: |
+          az aks create \
+            --resource-group "${{ steps.extract.outputs.resource_group }}" \
+            --name "${{ steps.extract.outputs.aks_name }}" \
+            --location "canadacentral" \
+            --node-count 2 \
+            --node-vm-size Standard_D4ds_v4 \
+            --enable-managed-identity \
+            --enable-oidc-issuer \
+            --enable-workload-identity \
+            --network-plugin azure \
+            --generate-ssh-keys
+
+      # -----------------------------------------------------------
+      # 6. Success Message
+      # -----------------------------------------------------------
+      - name: AKS Created
+        run: |
+          echo "AKS cluster '${{ steps.extract.outputs.aks_name }}' created successfully"
+          echo "Node pool: 2 x Standard_D4ds_v4"
