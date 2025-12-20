@@ -1,4 +1,4 @@
-name: Create AKS Cluster
+name: Test AKS Cluster
 
 on:
   issue_comment:
