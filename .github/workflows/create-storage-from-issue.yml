@@ -1,8 +1,8 @@
 name: Create Azure Storage from Issue
 
 on:
-  issue_comment:
-    types: [created]
+  # issue_comment:
+  #   types: [created]
 
 permissions:
   contents: write
@@ -12,7 +12,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ contains(github.event.comment.body, 'create') }}
+    # if: ${{ contains(github.event.comment.body, 'create') }}
+    #     contains(join(github.event.issue.labels.*.name, ','), 'storage-create')
 
     steps:
 
