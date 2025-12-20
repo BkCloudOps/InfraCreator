@@ -15,8 +15,8 @@ jobs:
     environment: aks-create
     if: |
       github.event.issue.pull_request == null &&
-      contains(join(github.event.issue.labels.*.name, ','), 'aks-create') &&
-      github.event.comment.body == '/create-aks'
+      contains(github.event.comment.body, '/create-aks') &&
+      contains(join(github.event.issue.labels.*.name, ','), 'aks-create')
 
 
     steps:
