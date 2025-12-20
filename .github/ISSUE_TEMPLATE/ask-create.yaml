@@ -1,0 +1,39 @@
+name: Create AKS Cluster
+description: Request creation of a new AKS cluster (fixed node pool)
+title: "AKS Create – <cluster-name>"
+labels:
+  - aks-create
+
+body:
+  - type: input
+    id: resource_group
+    attributes:
+      label: Resource Group Name
+      description: Azure Resource Group where AKS will be created
+      placeholder: rg-aks-platform
+    validations:
+      required: true
+
+  - type: input
+    id: aks_name
+    attributes:
+      label: AKS Cluster Name
+      description: Name of the AKS cluster
+      placeholder: aks-platform-01
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ### ⚙️ Cluster Defaults (Fixed)
+        - **Node Count:** 2  
+        - **VM Size:** Standard_D4ds_v4 (4 vCPU, 16 GiB RAM)  
+        - **Location:** canadacentral  
+        - **Auth:** Managed Identity + OIDC + Workload Identity  
+
+        To proceed, comment **exactly**:
+        ```
+        /aks-create
+        ```
+        This request requires **manual approval**.
