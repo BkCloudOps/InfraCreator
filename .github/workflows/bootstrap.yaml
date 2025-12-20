@@ -71,7 +71,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Flux Bootstrap
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           flux bootstrap github \
             --owner="${{ steps.extract.outputs.github_owner }}" \
