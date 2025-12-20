@@ -32,8 +32,12 @@ body:
         - **Location:** canadacentral  
         - **Auth:** Managed Identity + OIDC + Workload Identity  
 
-        To proceed, comment **exactly**:
+        To deploy the AKS Cluster, comment **exactly**:
         ```
-        /aks-create
+        /deploy
+        ```
+        To delete the AKS Cluster and resource group, comment **exactly**:
+        ```
+        /delete
         ```
         This request requires **manual approval**.
